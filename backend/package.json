@@ -1,0 +1,31 @@
+{
+  "name": "handwrite_io",
+  "version": "1.0.0",
+  "description": "",
+  "main": "App.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "run": "node App.js"
+  },
+  "private": true,
+  "dependencies": {
+    "base64url": "^3.0.1",
+    "body-parser": "^2.2.0",
+    "connect-sqlite3": "^0.9.15",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "ejs": "^3.1.10",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "google-auth-library": "^9.15.1",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "passport": "^0.7.0",
+    "passport-fido2-webauthn": "^0.1.0",
+    "passport-jwt": "^4.0.1",
+    "qrcode": "^1.5.4",
+    "redis": "^4.7.0",
+    "sqlite3": "^5.1.7",
+    "uuid": "^11.1.0"
+  }
+}
