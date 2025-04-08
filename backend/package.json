@@ -23,6 +23,8 @@
     "passport": "^0.7.0",
     "passport-fido2-webauthn": "^0.1.0",
     "passport-jwt": "^4.0.1",
+    "pg": "^8.14.1",
+    "pg-hstore": "^2.3.4",
     "qrcode": "^1.5.4",
     "redis": "^4.7.0",
     "sqlite3": "^5.1.7",
