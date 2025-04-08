@@ -136,3 +136,4 @@ dist
 .pnp.*
 backend/package-lock.json
 .DS_Store
+frontend/.npmrc
