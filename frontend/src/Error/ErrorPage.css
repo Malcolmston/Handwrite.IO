@@ -1,0 +1,230 @@
+/* ErrorPage.css */
+.error-page {
+    --error-color-light: #e74c3c;
+    --error-color-dark: #f87171;
+    --error-color: var(--error-color-light);
+
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    position: relative;
+    overflow: hidden;
+
+    /* Using theme variables */
+    background-color: var(--color-bg-primary, #f8f9fa);
+    color: var(--color-text-primary, #333);
+    transition: all var(--transition-duration, 200ms) var(--transition-timing, ease-in-out);
+}
+
+/* Set colors based on theme */
+[data-theme="dark"] .error-page {
+    --error-color: var(--error-color-dark);
+}
+
+.error-background {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0.05;
+}
+
+.error-background svg {
+    width: 80%;
+    height: 80%;
+    max-width: 800px;
+    fill: var(--error-color);
+    stroke: var(--error-color);
+    stroke-width: 1px;
+}
+
+.error-content {
+    border-radius: 0.5rem;
+    padding: 3rem;
+    width: 80%;
+    max-width: 600px;
+    text-align: center;
+    z-index: 10;
+    animation: fadeIn 0.8s ease-in-out;
+
+    /* Using theme variables */
+    background-color: var(--color-bg-secondary, white);
+    border: 1px solid var(--color-border-primary, #e2e8f0);
+    box-shadow: var(--shadow-md, 0 10px 30px rgba(0, 0, 0, 0.1));
+    transition: all var(--transition-duration, 200ms) var(--transition-timing, ease-in-out);
+}
+
+.error-code {
+    margin-bottom: 0.5rem;
+}
+
+.error-code h1 {
+    font-size: 5rem;
+    font-weight: 800;
+    margin: 0;
+    color: var(--error-color);
+    line-height: 1;
+    transition: color var(--transition-duration, 200ms) var(--transition-timing, ease-in-out);
+}
+
+.error-category h2 {
+    font-size: 1.8rem;
+    margin: 0 0 2rem 0;
+    font-weight: 400;
+    /* Using theme variables */
+    color: var(--color-text-secondary, #555);
+    transition: color var(--transition-duration, 200ms) var(--transition-timing, ease-in-out);
+}
+
+.error-message {
+    margin: 2rem 0;
+}
+
+.error-message .error-title {
+    font-size: 1.2rem;
+    line-height: 1.6;
+    font-weight: 500;
+    /* Using theme variables */
+    color: var(--color-text-primary, #666);
+}
+
+.error-message .error-explanation {
+    font-size: 1rem;
+    line-height: 1.5;
+    margin-top: 0.75rem;
+    /* Using theme variables */
+    color: var(--color-text-secondary, #888);
+}
+
+.error-actions {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 2rem;
+}
+
+.error-actions button {
+    background-color: var(--error-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 0.8rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-duration, 200ms) var(--transition-timing, ease-in-out);
+    box-shadow: var(--shadow-sm, 0 2px 10px rgba(0, 0, 0, 0.1));
+}
+
+.error-actions button:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md, 0 5px 15px rgba(0, 0, 0, 0.15));
+    opacity: 0.9;
+}
+
+.error-actions button:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(var(--error-color), 0.3);
+}
+
+/* Invalid error styling */
+.invalid-error {
+    background-color: var(--color-bg-secondary, #f8f9fa);
+    padding: 2rem;
+    text-align: center;
+}
+
+/* Animation */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Error category specific colors */
+.error-page[data-category="redirect"] {
+    --error-color-light: #3498db; /* Blue for redirections */
+    --error-color-dark: #60a5fa;
+}
+
+.error-page[data-category="client"] {
+    --error-color-light: #e74c3c; /* Red for client errors */
+    --error-color-dark: #f87171;
+}
+
+.error-page[data-category="server"] {
+    --error-color-light: #f39c12; /* Orange for server errors */
+    --error-color-dark: #fbbf24;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .error-content {
+        width: 90%;
+        padding: 2rem;
+    }
+
+    .error-code h1 {
+        font-size: 4rem;
+    }
+
+    .error-category h2 {
+        font-size: 1.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .error-content {
+        width: 95%;
+        padding: 1.5rem;
+    }
+
+    .error-code h1 {
+        font-size: 3rem;
+    }
+
+    .error-category h2 {
+        font-size: 1.2rem;
+    }
+
+    .error-actions {
+        flex-direction: column;
+        gap: 0.8rem;
+    }
+
+    .error-actions button {
+        width: 100%;
+    }
+}
+
+/* Print styles */
+@media print {
+    .error-page {
+        background: white;
+    }
+
+    .error-content {
+        box-shadow: none;
+        border: 1px solid #ddd;
+    }
+
+    .error-actions {
+        display: none;
+    }
+}
