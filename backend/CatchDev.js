@@ -1,20 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const session = require('express-session');
-const SQLiteStore = require('connect-sqlite3')(session);
 const crypto = require("crypto");
 const sessionStoreUtils = require('./Session');
-const { db } = require("./Session");
-const { base64ToBlob } = require("./base64ToBlob.js");
 
 const SESSION_SECRET_KEY = process.env.SESSION_SECRET_KEY;
 
-// Create session store
-const sessionStore = new SQLiteStore({
-  dir: './sessions',        // Directory where SQLite db will be saved
-  db: 'sessions.db',        // Database filename
-  table: 'sessions'         // Table name to use
-});
+// Create session store using PostgreSQL
+const sessionStore = sessionStoreUtils.configureSessionStore(session);
 
 // Function to generate a device ID
 function generateDeviceId(deviceInfo) {
@@ -25,22 +18,19 @@ function generateDeviceId(deviceInfo) {
 
 // Function to track a device
 function trackDevice(sessionId, deviceId, deviceInfo) {
-  const stmt = db.prepare(`
-    INSERT OR REPLACE INTO devices (session_id, device_id, user_agent, ip_address, last_seen)
-    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-  `);
-
-  stmt.run(
-    sessionId,
-    deviceId,
-    deviceInfo.userAgent,
-    deviceInfo.ipAddress,
-    (err) => {
-      if (err) console.error('Error tracking device:', err);
+  sessionStoreUtils.addDevice(sessionId, {
+    device_id: deviceId,
+    user_agent: deviceInfo.userAgent,
+    ip_address: deviceInfo.ipAddress
+  })
+  .then(result => {
+    if (!result.success) {
+      console.error('Error tracking device:', result.error || result.reason);
     }
-  );
-
-  stmt.finalize();
+  })
+  .catch(err => {
+    console.error('Exception tracking device:', err);
+  });
 }
 
 // Session middleware configuration

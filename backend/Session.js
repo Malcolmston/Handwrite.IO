@@ -1,48 +1,63 @@
-// session-store.js - Improved SQLite session store setup
+// session-store.js - PostgreSQL session store for Heroku
 
-const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg');
 const path = require('path');
 
-// Create a single database connection with better concurrency settings
-const db = new sqlite3.Database(path.join(__dirname, './sessions/sessions.db'), (err) => {
+// Create a PostgreSQL connection pool using environment variables
+const pool = new Pool({
+  user: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
+  ssl: {
+    rejectUnauthorized: false // Needed for Heroku PostgreSQL
+  }
+});
+
+// Establish connection and handle errors
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle PostgreSQL client', err);
+  process.exit(-1);
+});
+
+// Test the connection
+pool.query('SELECT NOW()', (err, res) => {
   if (err) {
-    console.error('Error opening database', err);
+    console.error('Error connecting to PostgreSQL database:', err);
   } else {
-    console.log('Connected to the SQLite database');
-
-    // Set pragmas for better concurrency
-    db.run('PRAGMA journal_mode = WAL;'); // Write-Ahead Logging mode
-    db.run('PRAGMA busy_timeout = 5000;'); // Wait up to 5 seconds when database is locked
-
+    console.log('Connected to PostgreSQL database');
+    
     // Create devices table if it doesn't exist
-    db.run(`
+    pool.query(`
       CREATE TABLE IF NOT EXISTS devices (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         session_id TEXT NOT NULL,
         device_id TEXT NOT NULL,
         user_agent TEXT,
         ip_address TEXT,
-        last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(session_id, device_id)
       )
-    `);
+    `, (err) => {
+      if (err) {
+        console.error('Error creating devices table:', err);
+      } else {
+        console.log('Devices table ready');
+      }
+    });
   }
 });
 
-// Configure session store with better error handling
+// Configure session store
 function configureSessionStore(session) {
-  const SQLiteStore = require('connect-sqlite3')(session);
-
-  const sessionStore = new SQLiteStore({
-    // Use an in-memory database for sessions if the main DB is locked
-    // This provides a fallback mechanism
-    db: 'sessions.db',
-    dir: path.join(__dirname, './sessions'),
-    concurrentDB: true,   // Allow multiple connections
-    table: 'sessions',
-    // Time between session store's garbage collection (in ms)
-    // This helps prevent constant DB writes
-    interval: 60 * 1000 // Run GC every minute instead of every request
+  const pgSession = require('connect-pg-simple')(session);
+  
+  const sessionStore = new pgSession({
+    pool: pool,
+    tableName: 'sessions', // Default is "session"
+    createTableIfMissing: true, // Automatically create the session table if it doesn't exist
+    pruneSessionInterval: 60 * 1000 // Run GC every minute
   });
 
   // Handle session store errors
@@ -53,43 +68,43 @@ function configureSessionStore(session) {
   return sessionStore;
 }
 
-// Get device count for a session ID - with better error handling
+// Get device count for a session ID
 function getDeviceCount(sessionId) {
   return new Promise((resolve, reject) => {
     if (!sessionId) {
       return resolve(0);
     }
 
-    db.get(
-      'SELECT COUNT(DISTINCT device_id) as count FROM devices WHERE session_id = ?',
+    pool.query(
+      'SELECT COUNT(DISTINCT device_id) as count FROM devices WHERE session_id = $1',
       [sessionId],
-      (err, row) => {
+      (err, result) => {
         if (err) {
           console.error('Error getting device count:', err);
           return resolve(0); // Fail gracefully
         }
-        resolve(row ? row.count : 0);
+        resolve(result.rows[0] ? parseInt(result.rows[0].count) : 0);
       }
     );
   });
 }
 
-// Get all devices for a session ID - with better error handling
+// Get all devices for a session ID
 function getDevices(sessionId) {
   return new Promise((resolve, reject) => {
     if (!sessionId) {
       return resolve([]);
     }
 
-    db.all(
-      'SELECT device_id, user_agent, ip_address, last_seen FROM devices WHERE session_id = ?',
+    pool.query(
+      'SELECT device_id, user_agent, ip_address, last_seen FROM devices WHERE session_id = $1',
       [sessionId],
-      (err, rows) => {
+      (err, result) => {
         if (err) {
           console.error('Error getting devices:', err);
           return resolve([]); // Fail gracefully
         }
-        resolve(rows || []);
+        resolve(result.rows || []);
       }
     );
   });
@@ -102,21 +117,21 @@ function getDeviceLocations(sessionId) {
       return resolve([]);
     }
 
-    db.all(
-      'SELECT DISTINCT ip_address FROM devices WHERE session_id = ?',
+    pool.query(
+      'SELECT DISTINCT ip_address FROM devices WHERE session_id = $1',
       [sessionId],
-      (err, rows) => {
+      (err, result) => {
         if (err) {
           console.error('Error getting device locations:', err);
           return resolve([]); // Fail gracefully
         }
-        resolve(rows.map(row => row.ip_address) || []);
+        resolve(result.rows.map(row => row.ip_address) || []);
       }
     );
   });
 }
 
-// Get session IDs for a username - with SQL injection protection
+// Get session IDs for a username
 function getSessionsForUser(username) {
   return new Promise((resolve, reject) => {
     if (!username) {
@@ -124,16 +139,16 @@ function getSessionsForUser(username) {
     }
 
     // Use parameterized query to prevent SQL injection
-    db.all(
-      `SELECT sess FROM sessions WHERE sess LIKE ?`,
+    pool.query(
+      `SELECT sess FROM sessions WHERE sess::text LIKE $1`,
       [`%"username":"${username}"%`],
-      (err, rows) => {
+      (err, result) => {
         if (err) {
           console.error('Error getting sessions for user:', err);
           return resolve([]); // Fail gracefully
         }
 
-        const sessionIds = rows.map(row => {
+        const sessionIds = result.rows.map(row => {
           try {
             const parsed = JSON.parse(row.sess);
             return parsed.id; // The session ID
@@ -155,37 +170,38 @@ function getDevicesForSessions(sessionIds) {
       return resolve([]);
     }
 
-    const placeholders = sessionIds.map(() => '?').join(',');
+    // Create placeholders for the query ($1, $2, etc.)
+    const placeholders = sessionIds.map((_, index) => `$${index + 1}`).join(',');
     const query = `SELECT session_id, device_id, user_agent, ip_address, last_seen 
                    FROM devices 
                    WHERE session_id IN (${placeholders})`;
 
-    db.all(query, sessionIds, (err, deviceRows) => {
+    pool.query(query, sessionIds, (err, result) => {
       if (err) {
         console.error('Error getting devices for sessions:', err);
         return resolve([]); // Fail gracefully
       }
-      resolve(deviceRows || []);
+      resolve(result.rows || []);
     });
   });
 }
 
-// Invalidate (delete) a device - with better error handling
+// Invalidate (delete) a device
 function invalidateDevice(sessionId, deviceId) {
   return new Promise((resolve, reject) => {
     if (!sessionId || !deviceId) {
       return resolve({ success: false, reason: 'Invalid parameters' });
     }
 
-    db.run(
-      'DELETE FROM devices WHERE session_id = ? AND device_id = ?',
+    pool.query(
+      'DELETE FROM devices WHERE session_id = $1 AND device_id = $2',
       [sessionId, deviceId],
-      function(err) {
+      (err, result) => {
         if (err) {
           console.error('Error invalidating device:', err);
           return resolve({ success: false, error: err.message });
         }
-        resolve({ success: this.changes > 0 });
+        resolve({ success: result.rowCount > 0 });
       }
     );
   });
@@ -201,21 +217,24 @@ function addDevice(sessionId, deviceInfo) {
     const { device_id, user_agent, ip_address } = deviceInfo;
 
     const tryInsert = (retries = 3) => {
-      db.run(
-        `INSERT OR REPLACE INTO devices (session_id, device_id, user_agent, ip_address, last_seen) 
-         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+      pool.query(
+        `INSERT INTO devices (session_id, device_id, user_agent, ip_address, last_seen)
+         VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+         ON CONFLICT (session_id, device_id)
+         DO UPDATE SET user_agent = $3, ip_address = $4, last_seen = CURRENT_TIMESTAMP
+         RETURNING id`,
         [sessionId, device_id, user_agent, ip_address],
-        function(err) {
+        (err, result) => {
           if (err) {
             console.error(`Error adding device (attempt ${4-retries}/3):`, err);
-            if (retries > 0 && (err.code === 'SQLITE_BUSY' || err.code === 'SQLITE_LOCKED')) {
-              // If database is locked, wait and retry
+            if (retries > 0) {
+              // If database has issues, wait and retry
               setTimeout(() => tryInsert(retries - 1), 500);
             } else {
               resolve({ success: false, error: err.message });
             }
           } else {
-            resolve({ success: true, id: this.lastID });
+            resolve({ success: true, id: result.rows[0].id });
           }
         }
       );
@@ -232,16 +251,16 @@ function updateDeviceLastSeen(sessionId, deviceId) {
       return resolve({ success: false });
     }
 
-    db.run(
+    pool.query(
       `UPDATE devices SET last_seen = CURRENT_TIMESTAMP 
-       WHERE session_id = ? AND device_id = ?`,
+       WHERE session_id = $1 AND device_id = $2`,
       [sessionId, deviceId],
-      function(err) {
+      (err, result) => {
         if (err) {
           console.error('Error updating device last seen:', err);
           return resolve({ success: false });
         }
-        resolve({ success: this.changes > 0 });
+        resolve({ success: result.rowCount > 0 });
       }
     );
   });
@@ -250,22 +269,27 @@ function updateDeviceLastSeen(sessionId, deviceId) {
 // Clean up expired sessions and their associated devices
 function cleanupExpiredSessions() {
   // This function should be called periodically, not on every request
-  db.run(`DELETE FROM devices WHERE session_id NOT IN (
-            SELECT SUBSTR(sid, 1, LENGTH(sid)-1) FROM sessions
-          )`);
+  pool.query(`
+    DELETE FROM devices 
+    WHERE session_id NOT IN (
+      SELECT sid FROM sessions
+    )
+  `, (err) => {
+    if (err) {
+      console.error('Error cleaning up expired sessions:', err);
+    }
+  });
 }
 
 process.on('exit', () => {
-  // Close database connection when the application exits
-  db.close((err) => {
-    if (err) {
-      console.error('Error closing database connection:', err);
-    }
+  // Close pool when the application exits
+  pool.end(() => {
+    console.log('Pool has ended');
   });
 });
 
 module.exports = {
-  db,
+  pool,
   configureSessionStore,
   getDeviceCount,
   getDevices,
