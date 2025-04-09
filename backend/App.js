@@ -32,6 +32,9 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const IOS_CLIENT_ID = process.env.GOOGLE_IOS_CLIENT_ID;
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
+const PORT = process.env.PORT || 3001;
+
+
 app.use(morgan('dev'));
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
@@ -726,6 +729,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(3001, () => {
+app.listen(PORT, () => {
   console.log('Server running on port 3001');
 });
