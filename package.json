@@ -4,7 +4,7 @@
     "description": "An application to help dyslexic people read",
     "main": "backend/App.js",
     "scripts": {
-      "start": "node backend/App.js && react-scripts frontend/start",
+      "start": "node backend/App.js",
       "build": "cd frontend && npm install && npm run build",
       "postinstall": "npm run install-backend",
       "install-backend": "cd backend && npm install",
