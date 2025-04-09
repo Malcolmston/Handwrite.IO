@@ -43,13 +43,17 @@ app.set('trust proxy', 1);
 
 app.use(sessionRoute)
 
-app.use(cors({
-  origin: 'http://localhost:3000',
+// Configure CORS for development and production
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? [process.env.PRODUCTION_CLIENT_URL || 'https://your-app-name.herokuapp.com'] 
+    : 'http://localhost:3000',
   credentials: true // This allows cookies to be sent with the request
-}));
+};
+app.use(cors(corsOptions));
 
 app.use("/oath", oath);
-app.use("/", touch)
+app.use("/", touch);
 
 // Configure Passport JWT strategy
 passport.use(new JwtStrategy(jwtOptions, async (jwt_payload, done) => {
@@ -267,7 +271,7 @@ app.get("/getsession", async (req, res) => {
   // Check if user is authenticated
 
 
-  if (req.session.passport.user.username  || req.session.passport.username ) {
+  if (req.session.passport && (req.session.passport.user?.username || req.session.passport.username)) {
     try {
       let {username, id} = (req.session.passport.user || req.session.passport)
 
@@ -705,15 +709,46 @@ app.get("/:username.png",async (req, res) => {
       message: e.message
     })
   }
+});
 
+// Serve static files from the React app in production
+if (process.env.NODE_ENV === 'production') {
+  // Serve static files from the frontend build directory
+  app.use(express.static(path.join(__dirname, '../frontend/build')));
 
-
-
-})
-
+  // Handle React routing, return all requests to React app
+  app.get('*', function(req, res) {
+    // Check if route is an API route
+    if (req.url.startsWith('/api/') || 
+        req.url.startsWith('/oath/') || 
+        req.url.startsWith('/login') || 
+        req.url.startsWith('/signup') || 
+        req.url.startsWith('/dashboard') ||
+        req.url.startsWith('/google/')) {
+      // Let the routes above handle API requests
+      return next();
+    }
+    
+    res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+  });
+}
 
 // Handling 404 errors
 app.use((req, res) => {
+  // For API routes, return a JSON response
+  if (req.url.startsWith('/api/')) {
+    return res.status(404).json({
+      success: false,
+      message: 'API route not found'
+    });
+  }
+  
+  // For non-API routes in production, let React handle 404s
+  if (process.env.NODE_ENV === 'production') {
+    return res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+  }
+  
+  // Fallback for development
   res.status(404).json({
     success: false,
     message: 'Route not found'
@@ -730,5 +765,5 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-  console.log('Server running on port 3001');
+  console.log(`Server running on port ${PORT}`);
 });
