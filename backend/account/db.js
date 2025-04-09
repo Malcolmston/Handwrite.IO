@@ -9,7 +9,7 @@ const DB_HOST = process.env.DB_HOST;
 const DB_NAME = process.env.DB_NAME;
 const DB_PORT = process.env.DB_PORT || 5432; // Default Postgres port
 
-// Configure Sequelize with critical logs only
+// Configure Sequelize with critical logs only and SSL
 const sequelize = new Sequelize(DB_NAME, DB_USERNAME, DB_PASSWORD, {
   host: DB_HOST,
   port: DB_PORT,
@@ -24,8 +24,11 @@ const sequelize = new Sequelize(DB_NAME, DB_USERNAME, DB_PASSWORD, {
     idle: 10000
   },
   dialectOptions: {
-    // Set SSL if needed (for production)
-    // ssl: process.env.NODE_ENV === 'production' ? { require: true, rejectUnauthorized: false } : false
+    // Required for AWS RDS PostgreSQL
+    ssl: {
+      require: true,
+      rejectUnauthorized: false // Important for self-signed certificates
+    }
   }
 });
 
@@ -36,8 +39,8 @@ const testConnection = async () => {
     console.log('Connection to database has been established successfully.');
   } catch (error) {
     console.error('Unable to connect to the database:', error.message);
-    // Optionally log stack trace for debugging
-    console.debug(error.stack);
+    // Log full error details for debugging
+    console.error('Connection error details:', error);
   }
 };
 

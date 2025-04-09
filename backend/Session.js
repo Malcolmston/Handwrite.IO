@@ -1,4 +1,4 @@
-// session-store.js - PostgreSQL session store for Heroku
+// session-store.js - PostgreSQL session store with SSL for Heroku/RDS
 
 const { Pool } = require('pg');
 const path = require('path');
@@ -9,24 +9,35 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   host: process.env.DB_HOST,
-  port: process.env.DB_PORT,
+  port: process.env.DB_PORT || 5432,
   ssl: {
-    rejectUnauthorized: false // Needed for Heroku PostgreSQL
-  }
+    require: true,
+    rejectUnauthorized: false // Important for self-signed certificates on RDS
+  },
+  max: 20, // Maximum number of clients in the pool
+  idleTimeoutMillis: 30000, // How long a client is allowed to remain idle before being closed
+  connectionTimeoutMillis: 15000 // How long to wait for a connection to become available
 });
 
 // Establish connection and handle errors
 pool.on('error', (err) => {
   console.error('Unexpected error on idle PostgreSQL client', err);
-  process.exit(-1);
+  // Don't exit process to allow reconnection attempts
 });
 
 // Test the connection
 pool.query('SELECT NOW()', (err, res) => {
   if (err) {
     console.error('Error connecting to PostgreSQL database:', err);
+    console.error('Connection details (without password):', {
+      user: process.env.DB_USERNAME,
+      database: process.env.DB_NAME,
+      host: process.env.DB_HOST,
+      port: process.env.DB_PORT,
+      ssl: 'enabled with rejectUnauthorized: false'
+    });
   } else {
-    console.log('Connected to PostgreSQL database');
+    console.log('Connected to PostgreSQL database at time:', res.rows[0].now);
     
     // Create devices table if it doesn't exist
     pool.query(`
@@ -234,7 +245,7 @@ function addDevice(sessionId, deviceInfo) {
               resolve({ success: false, error: err.message });
             }
           } else {
-            resolve({ success: true, id: result.rows[0].id });
+            resolve({ success: true, id: result.rows[0]?.id });
           }
         }
       );
